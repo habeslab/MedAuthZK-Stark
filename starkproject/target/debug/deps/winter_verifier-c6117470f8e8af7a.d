@@ -1,0 +1,9 @@
+C:\Users\Franco\Desktop\dottorato1\ISORC_SBT journal\winterfell code\starkproject\target\debug\deps\winter_verifier-c6117470f8e8af7a.d: C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\lib.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\channel.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\evaluator.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\composer.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\errors.rs
+
+C:\Users\Franco\Desktop\dottorato1\ISORC_SBT journal\winterfell code\starkproject\target\debug\deps\libwinter_verifier-c6117470f8e8af7a.rmeta: C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\lib.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\channel.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\evaluator.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\composer.rs C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\errors.rs
+
+C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\lib.rs:
+C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\channel.rs:
+C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\evaluator.rs:
+C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\composer.rs:
+C:\Users\Franco\Desktop\dottorato1\ISORC_SBT\ journal\winterfell\ code\winterfell\verifier\src\errors.rs:

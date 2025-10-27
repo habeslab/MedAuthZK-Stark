@@ -1,0 +1,1 @@
+DefaultRandomCoin<Blake3_256<winterfell::winter_math::fields::f64::BaseElement>>: ElementHasher
