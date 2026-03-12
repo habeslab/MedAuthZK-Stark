@@ -1,12 +1,15 @@
 [package]
 name = "starkproject"
 version = "0.1.0"
-edition = "2024"
 
 [dependencies]
-winterfell = { path = "../winterfell/winterfell" }
+winterfell = "0.13.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 base64 = "0.22" 
 anyhow = "1.0"
 bincode = "2.0.1"
+
+[[bin]]
+name = "test"
+path = "src/main.rs"

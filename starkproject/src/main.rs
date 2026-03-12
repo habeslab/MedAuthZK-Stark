@@ -1,5 +1,7 @@
+extern crate anyhow;
 use anyhow::Result;
 
+extern crate winterfell;
 // Winterfell imports (0.13.1)
 use winterfell::{
     Air, AirContext, Assertion, EvaluationFrame, Proof, TraceTable, TraceInfo, ProofOptions, verify, matrix::ColMatrix, 
@@ -12,6 +14,7 @@ use winterfell::{AcceptableOptions, BatchingMethod, CompositionPoly, Composition
 
 use winterfell::math::{FieldElement, ToElements};
 use winterfell::math::fields::f64::BaseElement;
+use std::time::Instant;
 
 use winterfell::crypto::{hashers, DefaultRandomCoin, MerkleTree};
 
@@ -98,28 +101,56 @@ impl Air for DiagnosiAir {
         result: &mut [E],
     ) {
         // prendi i valori dal trace
-        let idx: E = frame.current()[3];
-        let hash_diag: E = frame.current()[0] - idx;
-        let mal_id: E = frame.current()[1] - idx;
-        let sottocat_id: E = frame.current()[2] - idx;
+        // let idx: E = frame.current()[3];
+        // let hash_diag: E = frame.current()[0] - idx;
+        // let mal_id: E = frame.current()[1] - idx;
+        // let sottocat_id: E = frame.current()[2] - idx;
 
-        //println!("hash_diag: {:?}, mal_id: {:?}, sottocat_id: {:?}", hash_diag, mal_id, sottocat_id);
+        // //println!("hash_diag: {:?}, mal_id: {:?}, sottocat_id: {:?}", hash_diag, mal_id, sottocat_id);
 
-        let mut is_valid: E = E::ONE;
+        // let mut is_valid: E = E::ONE;
 
-        //controlla che le gli accoppiamenti hash, id e sottocategoria esistono
-        for (id, hash, sottos) in MALATTIE_BASE.iter() {
+        // //controlla che le gli accoppiamenti hash, id e sottocategoria esistono
+        // for (id, hash, sottos) in MALATTIE_BASE.iter() {
+        //     let id_e: E = (*id).into();
+        //     let hash_e: E = (*hash).into();
+        //     let sottocat_ids_e: [E; 3] = [sottos[0].into(), sottos[1].into(), sottos[2].into()];
+
+        //     if mal_id == id_e && hash_diag == hash_e && sottocat_ids_e.contains(&sottocat_id) {
+        //         is_valid = E::ZERO;
+        //     }
+        // }
+
+        // result[0] = is_valid; //0 se valido
+        //println!("constraint value: {:?}", result[0]);
+
+        let idx = frame.current()[3];
+        let hash = frame.current()[0] - idx;
+        let mal  = frame.current()[1] - idx;
+        let sott = frame.current()[2] - idx;
+
+        let mut acc = E::ONE;
+
+        for (id, hash_i, sottos) in MALATTIE_BASE.iter() {
             let id_e: E = (*id).into();
-            let hash_e: E = (*hash).into();
-            let sottocat_ids_e: [E; 3] = [sottos[0].into(), sottos[1].into(), sottos[2].into()];
+            let hash_e: E = (*hash_i).into();
+            let s0: E = sottos[0].into();
+            let s1: E = sottos[1].into();
+            let s2: E = sottos[2].into();
 
-            if mal_id == id_e && hash_diag == hash_e && sottocat_ids_e.contains(&sottocat_id) {
-                is_valid = E::ZERO;
-            }
+            // (mal-id)*(hash-hash_i)*(sott-s0)*(sott-s1)*(sott-s2)
+            let poly =
+                (mal - id_e)
+                * (hash - hash_e)
+                * (sott - s0)
+                * (sott - s1)
+                * (sott - s2);
+
+            acc *= poly;
         }
 
-        result[0] = is_valid; //0 se valido
-        //println!("constraint value: {:?}", result[0]);
+        // deve essere 0 se valido
+        result[0] = acc;
     }
 
 
@@ -242,32 +273,93 @@ fn main() -> Result<(), VerifierError> {
         sottocategoria_id: BaseElement::new(2411),
     };
 
-    let trace = build_trace(&inputs);
-    //let trace_info = trace.info();
-
-    let options = ProofOptions::new(
-        32, 8, 0,
-        FieldExtension::None,
-        8, 127,
-        BatchingMethod::Linear,
-        BatchingMethod::Linear,
+    println!(
+        "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15} | {:^15}",
+        "Queries", "Blowup", "Grinding", "Folding", "Security", "Size (B)", "Proving Time", "Verif. Time"
     );
+    println!("{}", "-".repeat(110));
 
-    let prover = DiagnosiProver::new(options);
+    // Parametri da variare
+    let queries_list = [27, 32];
+    let blowup_list = [4, 8];
+    let grinding_list = [0, 16];
+    let folding_list = [4, 8];
 
-    let proof = prover.prove(trace).unwrap();
+    for &num_queries in &queries_list {
+        for &blowup_factor in &blowup_list {
+            for &grinding_factor in &grinding_list {
+                for &folding_factor in &folding_list {
+                    // Calculate domain size assuming trace length 8
+                    let domain_size = 8 * blowup_factor;
+                    if num_queries >= domain_size {
+                         continue;
+                    }
 
-    let proof_bits=proof.to_bytes();
+                    // Ricostruisci trace (è consumato dal prover)
+                    let trace = build_trace(&inputs);
 
-    println!("Proof: {:?}",proof_bits);
+                    // Configura opzioni
+                    let options = ProofOptions::new(
+                        num_queries,
+                        blowup_factor,
+                        grinding_factor, // grinding
+                        FieldExtension::None,
+                        folding_factor,
+                        31,
+                        BatchingMethod::Linear,
+                        BatchingMethod::Linear,
+                    );
 
-    let proofn = Proof::from_bytes(&proof_bits);
-    let proofn = proofn.expect("Errore durante la deserializzazione del proof");
+                let prover = DiagnosiProver::new(options);
 
-    // Verifica
-    let min_opts = AcceptableOptions::MinConjecturedSecurity(63);
-    let verify_res = verify::<DiagnosiAir,H,DefaultRandomCoin<H>,MerkleTree<H>>(proofn, (), &min_opts);
-    println!("Verifica: {:?}", verify_res);
+                let start_prove = Instant::now();
+                match prover.prove(trace) {
+                    Ok(proof) => {
+                        let time_prove = start_prove.elapsed();
+                        let proof_bytes = proof.to_bytes();
+                        let size = proof_bytes.len();
+                        let security = grinding_factor as u32 + (num_queries as u32 * blowup_factor.trailing_zeros());
+
+                        // Verifica
+                        let proofn = Proof::from_bytes(&proof_bytes).unwrap();
+                        
+                        // Usiamo sicurezza minima 0 per non fallire su query basse durante il bench
+                        let min_opts = AcceptableOptions::MinConjecturedSecurity(0);
+                        
+                        let start_verify = Instant::now();
+                        let verify_res = verify::<DiagnosiAir, H, DefaultRandomCoin<H>, MerkleTree<H>>(
+                            proofn,
+                            (),
+                            &min_opts,
+                        );
+                        let time_verify = start_verify.elapsed();
+
+                        match verify_res {
+                            Ok(_) => {
+                                println!(
+                                    "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15?} | {:^15?}",
+                                    num_queries, blowup_factor, grinding_factor, folding_factor, security, size, time_prove, time_verify
+                                );
+                            }
+                            Err(_) => {
+                                println!(
+                                    "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15?} | {:^15}",
+                                    num_queries, blowup_factor, grinding_factor, folding_factor, security, size, time_prove, "Verify Fail"
+                                );
+                            }
+                        }
+                    }
+                    Err(_) => {
+                         println!(
+                            "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15} | {:^15}",
+                            num_queries, blowup_factor, grinding_factor, folding_factor, "N/A", "N/A", "Prove Fail", "N/A"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
 
     Ok(())
 }
