@@ -11,5 +11,13 @@ anyhow = "1.0"
 bincode = "2.0.1"
 
 [[bin]]
-name = "test"
-path = "src/main.rs"
+name = "single_credential"
+path = "src/main_single_cred.rs"
+
+[[bin]]
+name = "threshold_credential"
+path = "src/main_threshold.rs"
+
+[[bin]]
+name = "multi_credential"
+path = "src/main_multi.rs"
