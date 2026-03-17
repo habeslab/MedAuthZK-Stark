@@ -21,3 +21,11 @@ path = "src/main_threshold.rs"
 [[bin]]
 name = "multi_credential"
 path = "src/main_multi.rs"
+
+[[bin]]
+name = "multi_proof_size"
+path = "src/main_multi_proof_size.rs"
+
+[[bin]]
+name = "multi_proof_size_fixed"
+path = "src/main_multi_proof_size_fixed.rs"
