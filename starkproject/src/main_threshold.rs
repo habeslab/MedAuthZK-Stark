@@ -34,25 +34,25 @@ const MALATTIE_BASE: [(BaseElement, BaseElement, [BaseElement; 3]); 4] = [
 ];
 
 pub fn build_trace(inputs: &DiagnosiInputs) -> TraceTable<BaseElement> {
-    let trace_width = 4;
+    let trace_width = 5;
     let trace_length = 8; // minimo 8
 
     let mut trace = TraceTable::new(trace_width, trace_length);
 
     trace.fill(
         |state| {
-            // inizializza la prima riga con i valori di input
             state[0] = inputs.hash_diagnosi;
             state[1] = inputs.malattia_id;
             state[2] = inputs.sottocategoria_id;
             state[3] = BaseElement::ZERO;
+            state[4] = inputs.eta; // nuovo campo
         },
         |_, state| {
-            // copia manualmente i valori della riga precedente e aggiunge 1 per differenziare
             state[0] = state[0] + BaseElement::new(1);
             state[1] = state[1] + BaseElement::new(1);
             state[2] = state[2] + BaseElement::new(1);
             state[3] = state[3] + BaseElement::new(1);
+            state[4] = state[4] + BaseElement::new(1); // incrementa anche eta
         },
     );
 
@@ -64,6 +64,7 @@ pub struct DiagnosiInputs {
     pub hash_diagnosi: BaseElement,
     pub malattia_id: BaseElement,
     pub sottocategoria_id: BaseElement,
+    pub eta: BaseElement, // nuovo campo
 }
 
 
@@ -83,7 +84,7 @@ impl Air for DiagnosiAir {
 
     fn new(trace_info: TraceInfo, pub_inputs: (), options: ProofOptions) -> Self {
         // our execution trace should have 4 column.
-        assert_eq!(4, trace_info.width());
+        assert_eq!(5, trace_info.width());
 
         let degrees = vec![TransitionConstraintDegree::new(1)];
         let context = AirContext::new(trace_info, degrees, 1, options);
@@ -128,6 +129,8 @@ impl Air for DiagnosiAir {
         let hash = frame.current()[0] - idx;
         let mal  = frame.current()[1] - idx;
         let sott = frame.current()[2] - idx;
+        let eta = frame.current()[4] - idx;
+
 
         let mut acc = E::ONE;
 
@@ -149,7 +152,18 @@ impl Air for DiagnosiAir {
             acc *= poly;
         }
 
-        // deve essere 0 se valido
+        // Vincolo età: prodotto da 0 a 17
+        let mut acc_age = E::ONE;
+        for i in 0..18 {
+            acc_age *= eta - E::from(i as u32);
+        }
+
+        // Combina vincoli: risultato = malattie valide AND minorenne
+        // Se eta < 18 e malattia corretta -> acc * acc_age = 0
+        // Se eta >= 18 -> acc_age ≠ 0 -> result[0] ≠ 0 (fallisce)
+        acc += acc_age;
+
+        // Risultato finale
         result[0] = acc;
     }
 
@@ -271,8 +285,8 @@ fn main() -> Result<(), VerifierError> {
         hash_diagnosi: BaseElement::new(40),
         malattia_id: BaseElement::new(3),
         sottocategoria_id: BaseElement::new(2411),
+        eta: BaseElement::new(10), // esempio > 18
     };
-
     println!(
         "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15} | {:^15}",
         "Queries", "Blowup", "Grinding", "Folding", "Security", "Size (B)", "Proving Time", "Verif. Time"
