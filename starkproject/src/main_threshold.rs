@@ -14,7 +14,7 @@ use winterfell::{AcceptableOptions, BatchingMethod, CompositionPoly, Composition
 
 use winterfell::math::{FieldElement, ToElements};
 use winterfell::math::fields::f64::BaseElement;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use winterfell::crypto::{hashers, DefaultRandomCoin, MerkleTree};
 
@@ -280,43 +280,46 @@ impl Prover for DiagnosiProver {
     }
 }
 
+fn average_duration(total: Duration, samples: u32) -> Duration {
+    if samples == 0 {
+        Duration::ZERO
+    } else {
+        total / samples
+    }
+}
+
 fn main() -> Result<(), VerifierError> {
     let inputs = DiagnosiInputs {
         hash_diagnosi: BaseElement::new(40),
         malattia_id: BaseElement::new(3),
         sottocategoria_id: BaseElement::new(2411),
-        eta: BaseElement::new(10), // esempio > 18
+        eta: BaseElement::new(10),
     };
     println!(
-        "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15} | {:^15}",
-        "Queries", "Blowup", "Grinding", "Folding", "Security", "Size (B)", "Proving Time", "Verif. Time"
+        "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^7} | {:^9} | {:^15} | {:^15}",
+        "Queries", "Blowup", "Grinding", "Folding", "Security", "Runs", "Size (B)", "Avg Proving", "Avg Verif."
     );
-    println!("{}", "-".repeat(110));
+    println!("{}", "-".repeat(122));
 
-    // Parametri da variare
     let queries_list = [27, 32];
     let blowup_list = [4, 8];
     let grinding_list = [0, 16];
     let folding_list = [4, 8];
+    let benchmark_runs = 10u32;
 
     for &num_queries in &queries_list {
         for &blowup_factor in &blowup_list {
             for &grinding_factor in &grinding_list {
                 for &folding_factor in &folding_list {
-                    // Calculate domain size assuming trace length 8
                     let domain_size = 8 * blowup_factor;
                     if num_queries >= domain_size {
-                         continue;
+                        continue;
                     }
 
-                    // Ricostruisci trace (è consumato dal prover)
-                    let trace = build_trace(&inputs);
-
-                    // Configura opzioni
                     let options = ProofOptions::new(
                         num_queries,
                         blowup_factor,
-                        grinding_factor, // grinding
+                        grinding_factor,
                         FieldExtension::None,
                         folding_factor,
                         31,
@@ -324,59 +327,80 @@ fn main() -> Result<(), VerifierError> {
                         BatchingMethod::Linear,
                     );
 
-                let prover = DiagnosiProver::new(options);
+                    let security =
+                        grinding_factor as u32 + (num_queries as u32 * blowup_factor.trailing_zeros());
+                    let min_opts = AcceptableOptions::MinConjecturedSecurity(0);
+                    let mut prove_total = Duration::ZERO;
+                    let mut verify_total = Duration::ZERO;
+                    let mut successful_runs = 0u32;
+                    let mut proof_size = None;
 
-                let start_prove = Instant::now();
-                match prover.prove(trace) {
-                    Ok(proof) => {
-                        let time_prove = start_prove.elapsed();
+                    for _ in 0..benchmark_runs {
+                        let trace = build_trace(&inputs);
+                        let prover = DiagnosiProver::new(options.clone());
+
+                        let start_prove = Instant::now();
+                        let proof = match prover.prove(trace) {
+                            Ok(proof) => {
+                                prove_total += start_prove.elapsed();
+                                proof
+                            }
+                            Err(_) => continue,
+                        };
+
                         let proof_bytes = proof.to_bytes();
-                        let size = proof_bytes.len();
-                        let security = grinding_factor as u32 + (num_queries as u32 * blowup_factor.trailing_zeros());
+                        if proof_size.is_none() {
+                            proof_size = Some(proof_bytes.len());
+                        }
 
-                        // Verifica
                         let proofn = Proof::from_bytes(&proof_bytes).unwrap();
-                        
-                        // Usiamo sicurezza minima 0 per non fallire su query basse durante il bench
-                        let min_opts = AcceptableOptions::MinConjecturedSecurity(0);
-                        
                         let start_verify = Instant::now();
                         let verify_res = verify::<DiagnosiAir, H, DefaultRandomCoin<H>, MerkleTree<H>>(
                             proofn,
                             (),
                             &min_opts,
                         );
-                        let time_verify = start_verify.elapsed();
+                        let verify_elapsed = start_verify.elapsed();
 
-                        match verify_res {
-                            Ok(_) => {
-                                println!(
-                                    "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15?} | {:^15?}",
-                                    num_queries, blowup_factor, grinding_factor, folding_factor, security, size, time_prove, time_verify
-                                );
-                            }
-                            Err(_) => {
-                                println!(
-                                    "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15?} | {:^15}",
-                                    num_queries, blowup_factor, grinding_factor, folding_factor, security, size, time_prove, "Verify Fail"
-                                );
-                            }
+                        if verify_res.is_ok() {
+                            verify_total += verify_elapsed;
+                            successful_runs += 1;
                         }
                     }
-                    Err(_) => {
-                         println!(
-                            "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15} | {:^15}",
-                            num_queries, blowup_factor, grinding_factor, folding_factor, "N/A", "N/A", "Prove Fail", "N/A"
+
+                    if successful_runs > 0 {
+                        println!(
+                            "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^7} | {:^9} | {:^15?} | {:^15?}",
+                            num_queries,
+                            blowup_factor,
+                            grinding_factor,
+                            folding_factor,
+                            security,
+                            format!("{successful_runs}/{benchmark_runs}"),
+                            proof_size.unwrap_or(0),
+                            average_duration(prove_total, successful_runs),
+                            average_duration(verify_total, successful_runs)
+                        );
+                    } else {
+                        println!(
+                            "{:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^7} | {:^9} | {:^15} | {:^15}",
+                            num_queries,
+                            blowup_factor,
+                            grinding_factor,
+                            folding_factor,
+                            security,
+                            format!("0/{benchmark_runs}"),
+                            proof_size.unwrap_or(0),
+                            "Prove Fail",
+                            "Verify Fail"
                         );
                     }
                 }
             }
         }
     }
-}
 
     Ok(())
 }
-
 
 

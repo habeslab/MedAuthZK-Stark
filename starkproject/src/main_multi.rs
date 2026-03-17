@@ -277,9 +277,9 @@ fn main() -> Result<(), VerifierError> {
     println!("{}", "-".repeat(132));
 
     let attribute_counts = [5, 10, 20];
-    let queries_list = [18, 22, 27, 32, 38, 44];
-    let blowup_list = [4, 8, 16];
-    let grinding_list = [0, 8, 16];
+    let queries_list = [27, 32];
+    let blowup_list = [4, 8];
+    let grinding_list = [0, 16];
     let folding_list = [4, 8];
     let benchmark_runs = 10u32;
 
