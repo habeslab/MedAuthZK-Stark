@@ -1,6 +1,6 @@
 extern crate winterfell;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use winterfell::crypto::{hashers, DefaultRandomCoin, MerkleTree};
 use winterfell::math::fields::f64::BaseElement;
@@ -252,26 +252,36 @@ fn build_inputs(attribute_count: usize) -> DiagnosiInputs {
     DiagnosiInputs { attributi }
 }
 
+fn average_duration(total: Duration, samples: u32) -> Duration {
+    if samples == 0 {
+        Duration::ZERO
+    } else {
+        total / samples
+    }
+}
+
 fn main() -> Result<(), VerifierError> {
     println!(
-        "{:^6} | {:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15} | {:^15}",
+        "{:^6} | {:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^7} | {:^9} | {:^15} | {:^15}",
         "Attrs",
         "Queries",
         "Blowup",
         "Grinding",
         "Folding",
         "Security",
+        "Runs",
         "Size (B)",
-        "Proving Time",
-        "Verif. Time"
+        "Avg Proving",
+        "Avg Verif."
     );
-    println!("{}", "-".repeat(120));
+    println!("{}", "-".repeat(132));
 
     let attribute_counts = [5, 10, 20];
-    let queries_list = [27, 32];
-    let blowup_list = [4, 8];
-    let grinding_list = [0, 16];
+    let queries_list = [18, 22, 27, 32, 38, 44];
+    let blowup_list = [4, 8, 16];
+    let grinding_list = [0, 8, 16];
     let folding_list = [4, 8];
+    let benchmark_runs = 10u32;
 
     for &attribute_count in &attribute_counts {
         let inputs = build_inputs(attribute_count);
@@ -285,7 +295,6 @@ fn main() -> Result<(), VerifierError> {
                             continue;
                         }
 
-                        let trace = build_trace(&inputs);
                         let options = ProofOptions::new(
                             num_queries,
                             blowup_factor,
@@ -296,71 +305,88 @@ fn main() -> Result<(), VerifierError> {
                             BatchingMethod::Linear,
                             BatchingMethod::Linear,
                         );
-                        let prover = DiagnosiProver::new(options);
+                        let security = grinding_factor as u32
+                            + (num_queries as u32 * blowup_factor.trailing_zeros());
+                        let min_opts = AcceptableOptions::MinConjecturedSecurity(0);
+                        let mut prove_total = Duration::ZERO;
+                        let mut verify_total = Duration::ZERO;
+                        let mut successful_runs = 0u32;
+                        let mut verification_failures = 0u32;
+                        let mut proof_size = None;
 
-                        let start_prove = Instant::now();
-                        match prover.prove(trace) {
-                            Ok(proof) => {
-                                let time_prove = start_prove.elapsed();
-                                let proof_bytes = proof.to_bytes();
-                                let size = proof_bytes.len();
-                                let security = grinding_factor as u32
-                                    + (num_queries as u32 * blowup_factor.trailing_zeros());
-                                let proofn = Proof::from_bytes(&proof_bytes).unwrap();
-                                let min_opts = AcceptableOptions::MinConjecturedSecurity(0);
+                        for _ in 0..benchmark_runs {
+                            let trace = build_trace(&inputs);
+                            let prover = DiagnosiProver::new(options.clone());
 
-                                let start_verify = Instant::now();
-                                let verify_res =
-                                    verify::<DiagnosiAir, H, DefaultRandomCoin<H>, MerkleTree<H>>(
-                                        proofn, (), &min_opts,
-                                    );
-                                let time_verify = start_verify.elapsed();
+                            let start_prove = Instant::now();
+                            let proof = match prover.prove(trace) {
+                                Ok(proof) => {
+                                    prove_total += start_prove.elapsed();
+                                    proof
+                                }
+                                Err(_) => {
+                                    continue;
+                                }
+                            };
 
-                                match verify_res {
-                                    Ok(_) => {
-                                        println!(
-                                            "{:^6} | {:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15?} | {:^15?}",
-                                            attribute_count,
-                                            num_queries,
-                                            blowup_factor,
-                                            grinding_factor,
-                                            folding_factor,
-                                            security,
-                                            size,
-                                            time_prove,
-                                            time_verify
-                                        );
-                                    }
-                                    Err(_) => {
-                                        println!(
-                                            "{:^6} | {:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15?} | {:^15}",
-                                            attribute_count,
-                                            num_queries,
-                                            blowup_factor,
-                                            grinding_factor,
-                                            folding_factor,
-                                            security,
-                                            size,
-                                            time_prove,
-                                            "Verify Fail"
-                                        );
-                                    }
+                            let proof_bytes = proof.to_bytes();
+                            if proof_size.is_none() {
+                                proof_size = Some(proof_bytes.len());
+                            }
+
+                            let proofn = Proof::from_bytes(&proof_bytes).unwrap();
+                            let start_verify = Instant::now();
+                            let verify_res =
+                                verify::<DiagnosiAir, H, DefaultRandomCoin<H>, MerkleTree<H>>(
+                                    proofn, (), &min_opts,
+                                );
+                            let verify_elapsed = start_verify.elapsed();
+
+                            match verify_res {
+                                Ok(_) => {
+                                    verify_total += verify_elapsed;
+                                    successful_runs += 1;
+                                }
+                                Err(_) => {
+                                    verification_failures += 1;
                                 }
                             }
-                            Err(_) => {
-                                println!(
-                                    "{:^6} | {:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^10} | {:^15} | {:^15}",
-                                    attribute_count,
-                                    num_queries,
-                                    blowup_factor,
-                                    grinding_factor,
-                                    folding_factor,
-                                    "N/A",
-                                    "N/A",
-                                    "Prove Fail",
-                                    "N/A"
-                                );
-                            }
+                        }
+
+                        if successful_runs > 0 {
+                            println!(
+                                "{:^6} | {:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^7} | {:^9} | {:^15?} | {:^15?}",
+                                attribute_count,
+                                num_queries,
+                                blowup_factor,
+                                grinding_factor,
+                                folding_factor,
+                                security,
+                                format!("{successful_runs}/{benchmark_runs}"),
+                                proof_size.unwrap_or(0),
+                                average_duration(prove_total, successful_runs),
+                                average_duration(verify_total, successful_runs)
+                            );
+                        } else {
+                            let fail_label = if verification_failures > 0 {
+                                format!("0/{benchmark_runs}")
+                            } else {
+                                "0/10".to_string()
+                            };
+
+                            println!(
+                                "{:^6} | {:^8} | {:^8} | {:^8} | {:^8} | {:^8} | {:^7} | {:^9} | {:^15} | {:^15}",
+                                attribute_count,
+                                num_queries,
+                                blowup_factor,
+                                grinding_factor,
+                                folding_factor,
+                                security,
+                                fail_label,
+                                proof_size.unwrap_or(0),
+                                "Prove Fail",
+                                "Verify Fail"
+                            );
                         }
                     }
                 }
