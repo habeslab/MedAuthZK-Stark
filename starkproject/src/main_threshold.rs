@@ -305,7 +305,7 @@ fn main() -> Result<(), VerifierError> {
     let blowup_list = [4, 8];
     let grinding_list = [0, 16];
     let folding_list = [4, 8];
-    let benchmark_runs = 10u32;
+    let benchmark_runs = 150u32;
 
     for &num_queries in &queries_list {
         for &blowup_factor in &blowup_list {
