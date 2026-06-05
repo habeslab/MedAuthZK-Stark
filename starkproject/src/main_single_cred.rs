@@ -289,7 +289,7 @@ fn main() -> Result<(), VerifierError> {
     println!("{}", "-".repeat(122));
 
     let queries_list = [27, 32];
-    let blowup_list = [4, 8];
+    let blowup_list = [16, 32];
     let grinding_list = [0, 16];
     let folding_list = [4, 8];
     let benchmark_runs = 150u32;
@@ -307,7 +307,7 @@ fn main() -> Result<(), VerifierError> {
                         num_queries,
                         blowup_factor,
                         grinding_factor,
-                        FieldExtension::None,
+                        FieldExtension::Quadratic,
                         folding_factor,
                         31,
                         BatchingMethod::Linear,
@@ -316,7 +316,7 @@ fn main() -> Result<(), VerifierError> {
 
                     let security =
                         grinding_factor as u32 + (num_queries as u32 * blowup_factor.trailing_zeros());
-                    let min_opts = AcceptableOptions::MinConjecturedSecurity(0);
+                    let min_opts = AcceptableOptions::MinConjecturedSecurity(90);
                     let mut prove_total = Duration::ZERO;
                     let mut verify_total = Duration::ZERO;
                     let mut successful_runs = 0u32;

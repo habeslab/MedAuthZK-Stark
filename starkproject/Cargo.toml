@@ -15,6 +15,10 @@ name = "single_credential"
 path = "src/main_single_cred.rs"
 
 [[bin]]
+name = "single_credential_copy"
+path = "src/main_single_cred_copy.rs"
+
+[[bin]]
 name = "threshold_credential"
 path = "src/main_threshold.rs"
 
@@ -29,3 +33,7 @@ path = "src/main_multi_proof_size.rs"
 [[bin]]
 name = "multi_proof_size_fixed"
 path = "src/main_multi_proof_size_fixed.rs"
+
+[[bin]]
+name = "multi_proof_size_fixed_copy"
+path = "src/main_multi_proof_size_fixed_copy.rs"
